@@ -10,7 +10,6 @@
 <p>
 Persona Playground is a UI + backend demonstration for testing and comparing multiple AI personas in real time.  
 Switch between characters like <strong>Samantha</strong> and <strong>Arin</strong>, or compare them to a vanilla GPT model.  
-The app highlights differences in tone, style, and personality — helping you design AI agents with brand-aligned responses.
 </p>
 
 <h2>✨ Features</h2>

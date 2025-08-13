@@ -190,3 +190,13 @@ async def clear_chat(session_id: str = Form("default")):
     chat_sessions[session_id] = []
     logger.info(f"Cleared chat for session: {session_id}")
     return JSONResponse(content={"message": "Chat history cleared."})
+
+if __name__ == "__main__":
+    import uvicorn
+    PORT = int(os.getenv("PORT", 8000))  
+    uvicorn.run(
+        "main:app",          
+        host="0.0.0.0",      
+        port=PORT,
+        reload=True
+    )

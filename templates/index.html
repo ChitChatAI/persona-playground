@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Askrain powered by ChitChat AI</title>
+  <!-- Bootstrap CSS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css">
+  <!-- Bootstrap Bundle JS (for dropdowns) -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+  <!-- Ionicons v5 icons -->
+  <script type="module" src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.esm.js"
+    crossorigin="anonymous"></script>
+  <script nomodule src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.js" crossorigin="anonymous"></script>
+  <!-- Satoshi Font -->
+  <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
+  <!-- Highlight.js for code syntax highlighting -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/atom-one-light.min.css"
+    id="hljs-light-theme">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/atom-one-dark.min.css"
+    id="hljs-dark-theme" disabled>
+  <!-- CryptoJS for client-side encryption -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="/static/css/styles.css">
+  <style>
+    /* Add this style for the fixed input area */
+    .fixed-input-area {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      width: 100%;
+      z-index: 1050;
+      background: #f8f9fa;
+      box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.04);
+      transition: height 0.2s, padding 0.2s;
+    }
+
+    .fixed-input-area.shrink {
+      padding-top: 4px !important;
+      padding-bottom: 4px !important;
+    }
+
+    .fixed-input-area .input-container textarea {
+      transition: min-height 0.2s, height 0.2s;
+      min-height: 38px;
+      max-height: 120px;
+      resize: vertical;
+    }
+
+    .fixed-input-area.shrink .input-container textarea {
+      min-height: 28px;
+      max-height: 60px;
+    }
+
+    .main-content {
+      padding-bottom: 110px;
+      /* Height of input area + some margin */
+    }
+
+    .chat-header {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      background: #fff;
+      border-bottom: 1px solid #eee;
+    }
+
+    /* Optional: for dark mode support, adjust background as needed */
+  </style>
+</head>
+
+<body>
+  <div class="app-container">
+    <div class="main-content container-fluid">
+      <div class="row">
+        <!-- Samantha | Ask Rain Panel -->
+        <div class="col-md-6 border-end" style="min-height: 100vh;">
+          <div class="chat-container">
+            <div class="chat-header">
+              <!-- Persona dropdown -->
+              <div class="d-flex align-items-center">
+                <div class="dropdown">
+                  <button class="btn btn-link dropdown-toggle p-0" type="button" id="personaDropdown"
+                    data-bs-toggle="dropdown" aria-expanded="false" style="font-size:1.25rem; font-weight:600;">
+                    <span id="selectedPersonaLabel">Samantha</span>
+                  </button>
+                  <ul class="dropdown-menu" aria-labelledby="personaDropdown">
+                    <li><a class="dropdown-item persona-option" data-persona="samantha" href="#">Samantha</a></li>
+                    <li><a class="dropdown-item persona-option disabled" data-persona="arin" href="#" tabindex="-1"
+                        aria-disabled="true">Arin <span class="text-muted ms-1"
+                          style="font-size:0.9em;">(disabled)</span></a></li>
+                  </ul>
+                </div>
+                <span class="ms-2" id="personaPanelLabel">| Ask Rain <span class="offline-badge"
+                    id="offlineBadge">Offline</span></span>
+              </div>
+              <div class="tone-indicator" id="toneIndicator">
+                <ion-icon name="happy-outline"></ion-icon>
+                <span id="toneText">Neutral</span>
+              </div>
+            </div>
+            <div class="messages" id="messages">
+              <!-- Samantha messages will be appended here -->
+            </div>
+            <div class="loading-indicator" id="loadingIndicator">
+              <div class="loading-spinner"></div>
+              <span>Processing your request...</span>
+            </div>
+          </div>
+        </div>
+        <!-- Vanilla GPT Panel -->
+        <div class="col-md-6" style="min-height: 100vh;">
+          <div class="chat-container">
+            <div class="chat-header">
+              <h5>Vanilla GPT <span class="offline-badge" id="offlineBadgeVanilla">Offline</span></h5>
+              <div class="tone-indicator" id="toneIndicatorVanilla">
+                <ion-icon name="happy-outline"></ion-icon>
+                <span id="toneTextVanilla">Neutral</span>
+              </div>
+            </div>
+            <div class="messages" id="messagesVanilla">
+              <!-- Vanilla GPT messages will be appended here -->
+            </div>
+            <div class="loading-indicator" id="loadingIndicatorVanilla">
+              <div class="loading-spinner"></div>
+              <span>Processing your request...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Removed input area from here -->
+    </div>
+    <!-- Fixed input area at the bottom -->
+    <div class="fixed-input-area border-top pt-2 pb-2">
+      <div class="container">
+        <div class="suggestion-container mb-2">
+          <div class="suggestion-chips" id="suggestionChips">
+            <button class="suggestion-chip">It feels like we've know each other for years!</button>
+            <button class="suggestion-chip">Can we have a relaxed chat?</button>
+            <button class="suggestion-chip">I'm in a weird mood – can we talk?</button>
+            <button class="suggestion-chip">Samantha, convince me to stay with rain.</button>
+            <button class="suggestion-chip">How would you handle a really difficult customer?</button>
+            <button class="suggestion-chip">Can you help me humanise this chatbot reply?</button>
+            <button class="suggestion-chip">Take this cold message and make it warmer.</button>
+            <button class="suggestion-chip">Talk to me like you're in a rush.</button>
+            <button class="suggestion-chip">How have you been lately?</button>
+            <button class="suggestion-chip">What's your moral stance on white lies in sales?</button>
+            <button class="suggestion-chip">Tell me something about yourself.</button>
+            <button class="suggestion-chip">Tell me how you make decisions?</button>
+          </div>
+        </div>
+        <div class="input-container d-flex align-items-center">
+          <textarea class="form-control me-2" id="messageInput" rows="1" placeholder="Type your message..."
+            required></textarea>
+          <div class="input-actions d-flex align-items-center">
+            <button class="input-action-button me-1" id="voiceInputBtn" title="Voice input">
+              <ion-icon name="mic-outline"></ion-icon>
+            </button>
+            <button class="input-action-button me-1" id="imageUploadBtn" title="Upload image">
+              <ion-icon name="image-outline"></ion-icon>
+            </button>
+            <input type="file" id="imageInput" accept="image/*" style="display: none;">
+          </div>
+          <button type="submit" class="send-button ms-2" id="sendBtn">
+            <ion-icon name="send-outline"></ion-icon>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Panel -->
+  <div class="settings-panel" id="settingsPanel">
+    <div class="settings-header">
+      <h5>Settings</h5>
+      <button class="settings-close" id="settingsClose">
+        <ion-icon name="close-outline"></ion-icon>
+      </button>
+    </div>
+
+    <div class="settings-section">
+      <h6>Appearance</h6>
+      <div class="form-check form-switch">
+        <input class="form-check-input" type="checkbox" id="darkModeSwitch">
+        <label class="form-check-label" for="darkModeSwitch">Dark Mode</label>
+      </div>
+
+      <div class="mt-3">
+        <label class="form-label">Message Spacing</label>
+        <select class="form-select" id="messageSpacingSelect">
+          <option value="compact">Compact</option>
+          <option value="comfortable" selected>Comfortable</option>
+          <option value="spacious">Spacious</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Removed AI Behavior section -->
+
+    <div class="settings-section">
+      <h6>Privacy & Data</h6>
+      <div class="form-check form-switch">
+        <input class="form-check-input" type="checkbox" id="saveHistorySwitch" checked>
+        <label class="form-check-label" for="saveHistorySwitch">Save Chat History</label>
+      </div>
+
+      <div class="form-check form-switch mt-2">
+        <input class="form-check-input" type="checkbox" id="encryptionSwitch">
+        <label class="form-check-label" for="encryptionSwitch">Encrypt Stored Chats</label>
+      </div>
+
+      <div id="encryptionPasswordDiv" style="display: none;" class="mt-2">
+        <input type="password" class="form-control" id="encryptionPassword" placeholder="Encryption password">
+        <small class="text-muted">Remember this password! If lost, you can't recover your chats.</small>
+      </div>
+
+      <div class="mt-3">
+        <button class="btn btn-outline-secondary" id="exportDataBtn">
+          <ion-icon name="download-outline"></ion-icon> Export All Data
+        </button>
+
+        <div class="export-options" id="exportOptions" style="display: none;">
+          <button class="btn btn-sm btn-outline-primary" id="exportJsonBtn">JSON</button>
+          <button class="btn btn-sm btn-outline-primary" id="exportTextBtn">Text</button>
+          <button class="btn btn-sm btn-outline-primary" id="exportHtmlBtn">HTML</button>
+        </div>
+      </div>
+
+      <div class="mt-3">
+        <button class="btn btn-outline-danger" id="clearDataBtn">
+          <ion-icon name="trash-outline"></ion-icon> Clear All Saved Data
+        </button>
+      </div>
+
+      <div class="mt-4">
+        <button class="btn btn-link p-0" id="privacyPolicyBtn">View Privacy Policy</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Privacy Policy Modal -->
+  <div id="privacyModal" class="modal">
+    <div class="modal-content">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5>Privacy & Data Policy</h5>
+        <button class="btn-close" id="closePrivacyModal"></button>
+      </div>
+      <div class="modal-body">
+        <h6>How We Handle Your Data</h6>
+        <p>Samantha AI Chat is designed with privacy in mind:</p>
+        <ul>
+          <li><strong>Local Storage:</strong> Your chat history is stored only in your browser's local storage. It never
+            leaves your device unless you're actively sending messages.</li>
+          <li><strong>Message Processing:</strong> When you send a message, it's processed by OpenAI's API. Please refer
+            to <a href="https://openai.com/policies/privacy-policy" target="_blank">OpenAI's Privacy Policy</a> for
+            information on how they handle data.</li>
+          <li><strong>Optional Encryption:</strong> You can enable client-side encryption for your stored conversations,
+            adding an extra layer of protection.</li>
+          <li><strong>No Tracking:</strong> We don't use analytics cookies or tracking mechanisms.</li>
+        </ul>
+
+        <h6>Your Controls</h6>
+        <p>You have full control over your data:</p>
+        <ul>
+          <li>Delete individual conversations</li>
+          <li>Clear all data with one click</li>
+          <li>Export your conversations</li>
+          <li>Disable chat history storage entirely</li>
+        </ul>
+      </div>
+      <div class="d-flex justify-content-end">
+        <button class="btn btn-primary" id="acceptPrivacyBtn">I understand</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Context Menu -->
+  <div class="context-menu" id="messageContextMenu">
+    <div class="context-menu-item" id="editMenuItem">
+      <ion-icon name="create-outline"></ion-icon> Edit Message
+    </div>
+    <div class="context-menu-item" id="copyMenuItem">
+      <ion-icon name="copy-outline"></ion-icon> Copy Text
+    </div>
+    <div class="context-menu-item" id="regenerateMenuItem">
+      <ion-icon name="refresh-outline"></ion-icon> Regenerate Response
+    </div>
+    <div class="context-menu-item delete-button" id="deleteMenuItem">
+      <ion-icon name="trash-outline"></ion-icon> Delete Message
+    </div>
+  </div>
+
+  <!-- Load Highlight.js library -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
+
+  <!-- Load our custom JavaScript -->
+  <script src="/static/js/scripts.js"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      const input = document.getElementById("messageInput");
+      const sendBtn = document.getElementById("sendBtn");
+      const messagesSamantha = document.getElementById("messages");
+      const messagesVanilla = document.getElementById("messagesVanilla");
+      const loadingSamantha = document.getElementById("loadingIndicator");
+      const loadingVanilla = document.getElementById("loadingIndicatorVanilla");
+      let selectedPersona = "samantha";
+      const personaLabel = document.getElementById("selectedPersonaLabel");
+      const personaPanelLabel = document.getElementById("personaPanelLabel");
+
+      // Store chat history for each persona in-memory (for UI only)
+      const uiHistory = {
+        samantha: [],
+        arin: [],
+        vanilla: []
+      };
+
+      // Persona dropdown logic
+      document.querySelectorAll(".persona-option").forEach(function (item) {
+        item.addEventListener("click", function (e) {
+          e.preventDefault();
+          selectedPersona = this.getAttribute("data-persona");
+          personaLabel.textContent = this.textContent;
+          // Update panel label to reflect persona
+          if (selectedPersona === "arin") {
+            personaPanelLabel.innerHTML = '| Arin <span class="offline-badge" id="offlineBadge">Offline</span>';
+          } else {
+            personaPanelLabel.innerHTML = '| Ask Rain <span class="offline-badge" id="offlineBadge">Offline</span>';
+          }
+          // Render the correct history for the selected persona
+          renderMessages(messagesSamantha, uiHistory[selectedPersona]);
+        });
+      });
+
+      function appendUserMessage(text) {
+        // Add user message to all panels' histories
+        uiHistory.samantha.push({ role: "user", content: text });
+        uiHistory.arin.push({ role: "user", content: text });
+        uiHistory.vanilla.push({ role: "user", content: text });
+        renderMessages(messagesSamantha, uiHistory[selectedPersona]);
+        renderMessages(messagesVanilla, uiHistory.vanilla);
+      }
+
+      function appendAssistantMessage(panel, text, persona = null) {
+        if (panel === messagesSamantha && persona) {
+          uiHistory[persona].push({ role: "assistant", content: text });
+          // Only re-render if currently viewing this persona
+          if (selectedPersona === persona) {
+            renderMessages(messagesSamantha, uiHistory[persona]);
+          }
+          // Update tone for Samantha/Arin panel
+          updateToneIndicator("samantha", detectToneFromMessage(text));
+        } else if (panel === messagesVanilla) {
+          uiHistory.vanilla.push({ role: "assistant", content: text });
+          renderMessages(messagesVanilla, uiHistory.vanilla);
+          // Update tone for Vanilla GPT panel
+          updateToneIndicator("vanilla", detectToneFromMessage(text));
+        }
+      }
+
+      function appendMessage(panel, msg) {
+        const div = document.createElement("div");
+        div.className = "message " + (msg.role === "user" ? "user-message" : "assistant-message") + " mb-2";
+        div.textContent = msg.content;
+        panel.appendChild(div);
+        panel.scrollTop = panel.scrollHeight;
+      }
+
+      function renderMessages(panel, history) {
+        panel.innerHTML = "";
+        history.forEach(msg => appendMessage(panel, msg));
+        panel.scrollTop = panel.scrollHeight;
+      }
+
+      function setLoading(loading, show) {
+        if (loading) loading.style.display = show ? "flex" : "none";
+      }
+
+      // Typing indicator helpers for both panels
+      function showTypingIndicator(panel) {
+        removeTypingIndicator(panel); // Remove any existing
+        const typingDiv = document.createElement("div");
+        typingDiv.className = "typing-indicator-panel";
+        typingDiv.innerHTML = `
+        <div class="typing-indicator" style="display:flex;align-items:center;gap:2px;">
+          <span class="typing-dot" style="display:inline-block;width:8px;height:8px;background:#bbb;border-radius:50%;animation:typingWave 1.2s infinite 0s;"></span>
+          <span class="typing-dot" style="display:inline-block;width:8px;height:8px;background:#bbb;border-radius:50%;animation:typingWave 1.2s infinite 0.2s;"></span>
+          <span class="typing-dot" style="display:inline-block;width:8px;height:8px;background:#bbb;border-radius:50%;animation:typingWave 1.2s infinite 0.4s;"></span>
+        </div>
+      `;
+        panel.appendChild(typingDiv);
+        panel.scrollTop = panel.scrollHeight;
+      }
+      function removeTypingIndicator(panel) {
+        const typing = panel.querySelector('.typing-indicator-panel');
+        if (typing) typing.remove();
+      }
+      // Add CSS animation for wavy dots if not present
+      if (!document.getElementById("typingWaveStyle")) {
+        const style = document.createElement("style");
+        style.id = "typingWaveStyle";
+        style.innerHTML = `
+        @keyframes typingWave {
+          0%, 80%, 100% { transform: translateY(0); opacity: 0.6; }
+          40% { transform: translateY(-8px); opacity: 1; }
+        }
+      `;
+        document.head.appendChild(style);
+      }
+
+      function sendMessage() {
+        const text = input.value.trim();
+        if (!text) return;
+        appendUserMessage(text);
+        input.value = "";
+        setLoading(loadingSamantha, true);
+        setLoading(loadingVanilla, true);
+
+        // Show typing indicators
+        showTypingIndicator(messagesSamantha);
+        showTypingIndicator(messagesVanilla);
+
+        // Always send to both Samantha and Arin (concurrently)
+        fetch("/chat", {
+          method: "POST",
+          body: new URLSearchParams({ message: text, session_id: "samantha" })
+        })
+          .then(res => res.json())
+          .then(data => {
+            removeTypingIndicator(messagesSamantha);
+            appendAssistantMessage(messagesSamantha, data.reply, "samantha");
+          })
+          .catch(() => {
+            removeTypingIndicator(messagesSamantha);
+            appendAssistantMessage(messagesSamantha, "[Error: Could not get response]", "samantha");
+          });
+
+        fetch("/chat", {
+          method: "POST",
+          body: new URLSearchParams({ message: text, session_id: "arin" })
+        })
+          .then(res => res.json())
+          .then(data => {
+            // Only remove typing indicator if Samantha's already removed (avoid flicker)
+            removeTypingIndicator(messagesSamantha);
+            appendAssistantMessage(messagesSamantha, data.reply, "arin");
+          })
+          .catch(() => {
+            removeTypingIndicator(messagesSamantha);
+            appendAssistantMessage(messagesSamantha, "[Error: Could not get response]", "arin");
+          })
+          .finally(() => setLoading(loadingSamantha, false));
+
+        // Vanilla (right)
+        fetch("/vanilla", {
+          method: "POST",
+          body: new URLSearchParams({ message: text, session_id: "vanilla" })
+        })
+          .then(res => res.json())
+          .then(data => {
+            removeTypingIndicator(messagesVanilla);
+            appendAssistantMessage(messagesVanilla, data.reply);
+          })
+          .catch(() => {
+            removeTypingIndicator(messagesVanilla);
+            appendAssistantMessage(messagesVanilla, "[Error: Could not get response]");
+          })
+          .finally(() => setLoading(loadingVanilla, false));
+      }
+
+      sendBtn.addEventListener("click", sendMessage);
+      input.addEventListener("keydown", function (e) {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          sendMessage();
+        }
+      });
+
+      // Responsive input area on scroll
+      const fixedInput = document.querySelector('.fixed-input-area');
+      let ticking = false;
+      function handleInputResizeOnScroll() {
+        if (!ticking) {
+          window.requestAnimationFrame(function () {
+            const scrollBottom = window.innerHeight + window.scrollY;
+            const docHeight = document.body.offsetHeight;
+            if (docHeight - scrollBottom < 10) {
+              fixedInput.classList.add('shrink');
+            } else {
+              fixedInput.classList.remove('shrink');
+            }
+            ticking = false;
+          });
+          ticking = true;
+        }
+      }
+      window.addEventListener('scroll', handleInputResizeOnScroll, { passive: true });
+
+      // Tone indicator elements
+      const toneIndicator = document.getElementById("toneIndicator");
+      const toneText = document.getElementById("toneText");
+      const toneIndicatorVanilla = document.getElementById("toneIndicatorVanilla");
+      const toneTextVanilla = document.getElementById("toneTextVanilla");
+
+      // Update tone indicator for a given panel
+      function updateToneIndicator(panel, tone) {
+        const toneIcons = {
+          optimistic: "happy-outline",
+          neutral: "remove-outline",
+          reflective: "eye-outline",
+          energized: "flash-outline",
+          calm: "leaf-outline",
+          casual: "happy-outline",
+          frustrated: "sad-outline",
+          technical: "construct-outline"
+        };
+        const toneDescriptions = {
+          optimistic: "Optimistic",
+          neutral: "Neutral",
+          reflective: "Reflective",
+          energized: "Energized",
+          calm: "Calm",
+          casual: "Casual",
+          frustrated: "Frustrated",
+          technical: "Technical"
+        };
+        if (panel === "samantha") {
+          toneText.textContent = toneDescriptions[tone] || "Neutral";
+          toneIndicator.querySelector("ion-icon").setAttribute("name", toneIcons[tone] || "remove-outline");
+        } else if (panel === "vanilla") {
+          toneTextVanilla.textContent = toneDescriptions[tone] || "Neutral";
+          toneIndicatorVanilla.querySelector("ion-icon").setAttribute("name", toneIcons[tone] || "remove-outline");
+        }
+      }
+      
+      // Heuristic: detect tone from message content (assistant-only)
+      function detectToneFromMessage(msg, speaker = "assistant") {
+        // Ignore user messages for tone detection
+        if (speaker !== "assistant") return null;
+
+        const text = msg.toLowerCase();
+        if (/error|fail|issue|problem|debug|api/.test(text)) return "technical";
+        if (/angry|frustrated|annoyed|upset|problem/.test(text)) return "frustrated";
+        if (/happy|great|awesome|cool|nice|thanks|thank you/.test(text)) return "optimistic";
+        if (/calm|relaxed|peaceful|chill/.test(text)) return "calm";
+        if (/reflect|think|consider|ponder/.test(text)) return "reflective";
+        if (/energy|excited|let's go|go!|rush/.test(text)) return "energized";
+        return "casual";
+      }
+
+    });
+  </script>
+</body>
+
+</html>

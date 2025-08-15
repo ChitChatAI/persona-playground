@@ -12,9 +12,8 @@ from fastapi import (
     Request,
     UploadFile,
     File,
-    Depends,
 )
-from fastapi.responses import JSONResponse, HTMLResponse, PlainTextResponse
+from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from openai import OpenAI, OpenAIError
@@ -37,11 +36,7 @@ BASE_DIR = Path(__file__).resolve().parent
 static_dir = BASE_DIR / "static"
 templates_dir = BASE_DIR / "templates"
 
-# Built-in personas (optional)
-sam_persona_dir = BASE_DIR / "personality" / "sam"
-arin_persona_dir = BASE_DIR / "personality" / "arin"
-
-# Dynamic persona root
+# Dynamic persona root (uploads + current pointer live here)
 persona_root = BASE_DIR / "personality"
 
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
@@ -75,11 +70,11 @@ def _valid_file(upload: UploadFile) -> Tuple[bool, str]:
 
 class PersonaManager:
     """
-    - Each persona has a base folder (e.g. personality/sam) for baked-in docs.
-    - Uploads go to personality/<persona_name>/uploads/<ts>/; the "current" pointer mirrors latest upload.
-    - load_persona() resolves in this order:
-        natural_behavior_prompt.(txt|md) from latest upload or base
-        + top 2 other docs (to keep token budget modest)
+    - Each persona lives in personality/<persona_name>/
+    - Uploads go to personality/<persona_name>/uploads/<ts>/
+    - We mirror the latest upload batch into personality/<persona_name>/current/
+    - load_persona_text() pulls:
+        natural_behavior_prompt.(txt|md) from current (or base) + up to 2 more docs
     """
     def __init__(self, root: Path):
         self.root = root
@@ -106,7 +101,7 @@ class PersonaManager:
             current_files = [f.name for f in current.glob("*") if f.is_file()] if current.exists() else []
             results[p.name] = {
                 "current_files": sorted(current_files),
-                "base_files": sorted(base_files)
+                "base_files": sorted(base_files),
             }
         return results
 
@@ -136,7 +131,7 @@ class PersonaManager:
                 f.write(content)
             saved.append(out_path.name)
 
-        # Update "current" pointer by copying files into current (clean first)
+        # Mirror latest batch into personality/<persona>/current
         current = self.current_dir_for(persona_name)
         if current.exists():
             for f in current.iterdir():
@@ -151,31 +146,22 @@ class PersonaManager:
         return saved
 
     def _gather_docs(self, persona_name: str) -> List[Path]:
-        """
-        Prefers files from current upload; falls back to base_dir files if current missing.
-        """
         persona_dir = self.base_dir_for(persona_name)
         current = self.current_dir_for(persona_name)
         docs: List[Path] = []
-
-        # Prefer current upload docs
         if current.exists():
             docs.extend(sorted([p for p in current.iterdir() if p.suffix.lower() in ALLOWED_EXTS and p.is_file()]))
-
-        # Also include base docs if not duplicated by current (by filename)
         base_candidates = sorted([p for p in persona_dir.iterdir() if p.suffix.lower() in ALLOWED_EXTS and p.is_file()])
         current_names = {p.name for p in docs}
         for p in base_candidates:
             if p.name not in current_names:
                 docs.append(p)
-
         return docs
 
     def load_persona_text(self, persona_name: str) -> str:
         persona_name = _slugify(persona_name)
         docs = self._gather_docs(persona_name)
 
-        # Separate natural behavior prompt if available
         nbp: Optional[Path] = None
         others: List[Path] = []
         for p in docs:
@@ -187,8 +173,6 @@ class PersonaManager:
         sections: List[str] = []
         if nbp and nbp.exists():
             sections.append(_read_text(nbp))
-
-        # Only include first 2 other docs to keep tokens modest (retain your original logic)
         for p in others[:2]:
             txt = _read_text(p)
             if txt:
@@ -199,21 +183,10 @@ class PersonaManager:
 
 persona_manager = PersonaManager(persona_root)
 
-# Pre-existing convenience for your two defaults:
-def load_persona(persona_name: str = "samantha") -> str:
-    # Map common names to folders (keeps backward-compat with your code)
-    if persona_name.lower() in ["arin", "samantha", "sam"]:
-        mapped = "arin" if persona_name.lower() == "arin" else "sam"
-        # Ensure base dirs exist even if no uploads yet
-        persona_manager._ensure_persona_dirs(mapped)
-        return persona_manager.load_persona_text(mapped)
-    # Otherwise treat as custom persona folder name
+def load_persona(persona_name: str) -> str:
+    # Always treat as dynamic folder name now
     persona_manager._ensure_persona_dirs(persona_name)
     return persona_manager.load_persona_text(persona_name)
-
-# Warm up (optional)
-samantha_persona = load_persona("samantha")
-arin_persona = load_persona("arin")
 
 def get_recent_history(session_id: str) -> List[Dict[str, str]]:
     full_history = chat_sessions.get(session_id, [])
@@ -224,27 +197,6 @@ def get_recent_history(session_id: str) -> List[Dict[str, str]]:
 @app.get("/", response_class=HTMLResponse)
 async def serve_ui(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
-
-# --- Simple upload UI (optional) ---
-@app.get("/upload", response_class=HTMLResponse)
-async def upload_page():
-    # minimal form so you can test quickly
-    html = """
-    <html>
-      <head><title>Upload Persona</title></head>
-      <body style="font-family:system-ui; max-width:720px; margin:40px auto;">
-        <h2>Upload Persona Files</h2>
-        <form action="/upload_persona" method="post" enctype="multipart/form-data">
-          <label>Persona name (e.g., samantha, arin, nova):</label><br/>
-          <input name="persona_name" placeholder="samantha" required />
-          <p style="opacity:.8;margin:6px 0 16px;">Allowed: .txt, .md. You can include a special file named <code>natural_behavior_prompt.txt</code> or <code>.md</code>.</p>
-          <input type="file" name="files" multiple required />
-          <button type="submit">Upload</button>
-        </form>
-      </body>
-    </html>
-    """
-    return HTMLResponse(html)
 
 @app.post("/upload_persona")
 async def upload_persona(
@@ -258,7 +210,6 @@ async def upload_persona(
     saved = persona_manager.save_uploads(persona_name, files)
     logger.info(f"Saved {len(saved)} files for persona '{persona_name}': {saved}")
 
-    # Return active files for that persona
     listing = persona_manager.list_personas().get(persona_name, {})
     return JSONResponse({
         "persona": persona_name,
@@ -276,30 +227,17 @@ async def chat_endpoint(
     message: str = Form(...),
     creativity: float = Form(0.85),
     session_id: str = Form("default"),
-    persona_name: str = Form("samantha")  # 👈 allow caller to pick persona
+    persona_name: str = Form("persona"),
 ):
+    """
+    Left panel (Persona). Uses dynamic persona_name uploaded by the user.
+    """
     try:
-        logger.info(f"Received message: {message} | session: {session_id} | creativity: {creativity} | persona: {persona_name}")
+        logger.info(f"[Persona:{persona_name}] msg: {message} | session: {session_id} | creativity: {creativity}")
 
-        # Get trimmed session history
         history = get_recent_history(session_id)
-
-        # Load persona text dynamically (reflects latest uploads)
         persona_prompt = load_persona(persona_name)
-
         messages = [{"role": "system", "content": persona_prompt}] + history
-
-        # Handle /translate
-        if message.startswith("/translate"):
-            messages.append({
-                "role": "system",
-                "content": (
-                    "You're rewriting chatbot responses to sound natural, like Samantha would say them — "
-                    "casual, warm, and human. Keep all important info but make the tone effortless, flowing, and friendly."
-                )
-            })
-            message = message.replace("/translate", "").strip()
-
         messages.append({"role": "user", "content": message})
 
         response = client.chat.completions.create(
@@ -308,40 +246,36 @@ async def chat_endpoint(
             top_p=0.95,
             messages=messages
         )
-
         reply = (response.choices[0].message.content or "").strip()
 
-        # Save to chat history
         chat_sessions[session_id] = history + [
             {"role": "user", "content": message},
             {"role": "assistant", "content": reply}
         ]
 
-        logger.info(f"{persona_name.capitalize()} replied: {reply[:120]}{'...' if len(reply) > 120 else ''}")
-        return JSONResponse(content={"reply": reply})
+        logger.info(f"[Persona:{persona_name}] reply: {reply[:120]}{'...' if len(reply) > 120 else ''}")
+        return JSONResponse(content={"reply": reply, "persona_name": persona_name})
 
     except OpenAIError as e:
         logger.error(f"OpenAI API error: {e}")
         raise HTTPException(status_code=500, detail=f"OpenAI API error: {e}")
-
     except Exception as e:
         logger.error(f"Unexpected error: {e}")
         raise HTTPException(status_code=500, detail="An unexpected error occurred.")
 
-# New endpoint for Vanilla GPT panel (no persona prompt)
 @app.post("/vanilla")
 async def vanilla_endpoint(
     message: str = Form(...),
     creativity: float = Form(0.85),
     session_id: str = Form("vanilla")
 ):
+    """
+    Right panel (Vanilla). No persona system message.
+    """
     try:
-        logger.info(f"Vanilla GPT received message: {message} | session: {session_id} | creativity: {creativity}")
-
-        # Get trimmed session history
+        logger.info(f"[Vanilla] msg: {message} | session: {session_id} | creativity: {creativity}")
         history = get_recent_history(session_id)
-        messages = history.copy()  # No persona prompt
-
+        messages = history.copy()
         messages.append({"role": "user", "content": message})
 
         response = client.chat.completions.create(
@@ -350,22 +284,18 @@ async def vanilla_endpoint(
             top_p=0.95,
             messages=messages
         )
-
         reply = (response.choices[0].message.content or "").strip()
 
-        # Save to chat history
         chat_sessions[session_id] = history + [
             {"role": "user", "content": message},
             {"role": "assistant", "content": reply}
         ]
-        logger.info(f"Vanilla GPT replied: {reply[:120]}{'...' if len(reply) > 120 else ''}")
-
+        logger.info(f"[Vanilla] reply: {reply[:120]}{'...' if len(reply) > 120 else ''}")
         return JSONResponse(content={"reply": reply})
 
     except OpenAIError as e:
         logger.error(f"OpenAI API error: {e}")
         raise HTTPException(status_code=500, detail=f"OpenAI API error: {e}")
-
     except Exception as e:
         logger.error(f"Unexpected error: {e}")
         raise HTTPException(status_code=500, detail="An unexpected error occurred.")

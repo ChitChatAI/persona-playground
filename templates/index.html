@@ -28,7 +28,20 @@
     .fixed-input-area.shrink .input-container textarea { min-height: 28px; max-height: 60px; }
     .main-content { padding-bottom: 110px; }
     .chat-header { position: sticky; top: 0; z-index: 2; background: #fff; border-bottom: 1px solid #eee; }
-  </style>
+    .upload-link {
+      font-size: 14px;
+      color: #555; /* softer color */
+      text-decoration: none;
+      background: #f5f5f5; /* light background to make it look like a chip */
+      padding: 6px 12px;
+      border-radius: 6px;
+      transition: all 0.2s ease;
+    }
+
+    .upload-link:hover {
+      background: #e6e6e6; /* slightly darker on hover */
+      color: #000; /* bolder on hover */
+    }
 </head>
 
 <body>
@@ -98,7 +111,7 @@
     </div>
     <!-- Floating button for simple upload page -->
     <div style="position: fixed; bottom: 20px; left: 20px;">
-      <a href="/upload" target="_blank" class="btn btn-primary">Open simple upload page</a>
+      <a href="/upload" target="_blank" class="upload-link">Upload Persona</a>
     </div>
 
     <!-- Fixed input area -->

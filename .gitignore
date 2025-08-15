@@ -84,3 +84,6 @@ temp/
 
 # Virtual environments
 venv/
+.venv/
+
+.aider*
